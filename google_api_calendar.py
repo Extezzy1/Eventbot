@@ -26,11 +26,11 @@ class GoogleCalendar:
         except Exception as ex:
             return False
 
-    def get_events_for_date(self, date):
-        return self.service.events().list(calendarId="4ff767367e9c8f534d6f92415cc988472774f7d1e18c2ad853a3beeeed1f9a3b@group.calendar.google.com", timeMin=f"{date}T08:30:00-03:00", timeMax=f"{date}T21:30:00-03:00").execute()
+    def get_events_for_date(self, date, calendar_id):
+        return self.service.events().list(calendarId=calendar_id, timeMin=f"{date}T08:30:00+03:00", timeMax=f"{date}T21:30:00+03:00").execute()
 
-    def get_free_times_for_record(self, date):
-        events = self.get_events_for_date(date)
+    def get_free_times_for_record(self, date, calendar_id):
+        events = self.get_events_for_date(date, calendar_id)
         hours_to_record = [str(i) if i >= 10 else f"0{i}" for i in range(9, 22)]
         for event in events["items"]:
             hour = event["start"]["dateTime"].split("T")[-1].split(":")[0]
@@ -39,11 +39,9 @@ class GoogleCalendar:
                 hours_to_record.remove(hour)
         return [f"{hour}:00" for hour in hours_to_record]
 
-    def insert_into_calendar(self, calendar_id, date_from, date_to):
+    def insert_into_calendar(self, calendar_id, date_from, date_to, summary):
         event = {
-            'summary': 'Google I/O 2015',
-            'location': '800 Howard St., San Francisco, CA 94103',
-            'description': 'A chance to hear more about Google\'s developer products.',
+            'summary': summary,
             'start': {
                 'dateTime': f'{date_from}+03:00',
             },

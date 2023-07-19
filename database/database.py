@@ -107,6 +107,11 @@ class Database:
         with self.connection:
             return self.cursor.execute("SELECT expert_name, expert_style, expert_price, expert_link, expert_calendar_id FROM experts WHERE expert_id = ?", (expert_id, )).fetchall()
 
+    def get_expert_by_id_mail(self, expert_id):
+        with self.connection:
+            return self.cursor.execute("SELECT expert_name, expert_type, expert_style, expert_price, expert_link, expert_calendar_id FROM experts WHERE expert_id = ?", (expert_id, )).fetchall()
+
+
     def get_expert_photo_by_id(self, expert_id):
         with self.connection:
             return self.cursor.execute("SELECT file_id FROM expert_photos WHERE expert_id = ?", (expert_id, )).fetchall()

@@ -1,4 +1,4 @@
-food = "Еда"
+food = "Рестораны"
 event = "Мероприятия"
 favorite = "Избранное"
 places_nearby_by_geolocation = "Места рядом по геолокации"

@@ -5,6 +5,8 @@ import admin_markup
 import config
 from aiogram import Bot, Dispatcher, executor, types
 from aiogram.dispatcher import FSMContext
+
+import email_send
 from FSM import FSMClient, FSMPlace, FSMExpert, FSMGeo, FSMKitchen
 from aiogram.contrib.fsm_storage.memory import MemoryStorage
 import client_markup
@@ -24,6 +26,13 @@ db = Database("database/db.sqlite")
 calendar = GoogleCalendar()
 wallet = Payment(config.yoomoney_wallet, config.yoomoney_token)
 
+month_eng_to_ru = {"January": "января", "February": "февраля", "March": "марта", "April": "апреля",
+                   "May": "мая",
+                   "June": "июня", "July": "июля", "August": "августа", "September": "сентября",
+                   "October": "октября",
+                   "November": "ноября", "December": "декабря"}
+
+
 async def set_default_commands(dp):
     await dp.bot.set_my_commands([
         types.BotCommand("start", "Запустить бота"),
@@ -33,7 +42,11 @@ async def set_default_commands(dp):
 @dp.message_handler(commands=['start'], state="*")
 async def send_welcome(message: types.Message, state: FSMContext):
     await state.finish()
-    await bot.send_message(message.from_user.id, "Главное меню", reply_markup=client_markup.start_markup)
+    await bot.send_message(message.from_user.id, """Привет, я твой бот-ассистент по подбору ресторанов и мероприятий от команды <a href="https://t.me/miissartme">MIISSART</a>
+
+С моей помощью ты можешь найти идеальное место для встречи с друзьями или романтического ужина. Просто расскажи мне свои предпочтения и я подберу для тебя лучшие варианты! 
+Не забудь использовать функцию по поиску мест рядом с твоей Геолокацией, а также сохранять любимые заведения в Избранное """, reply_markup=client_markup.start_markup, parse_mode="HTML")
+
 
 
 @dp.callback_query_handler(lambda c: c.data.startswith("kitchen"), state=FSMClient.choice_kitchens)
@@ -51,7 +64,7 @@ async def choice_drink_places(callback_query: types.CallbackQuery, state: FSMCon
     drink_place_type = callback_query.data.split("_")[-1]
     places = db.get_random_3_drink_place_by_type(drink_place_type)
     if len(places) == 0:
-        await bot.send_message(callback_query.from_user.id, "Список заведений пуст!", reply_markup=client_markup.start_markup)
+        await bot.send_message(callback_query.from_user.id, "Список заведений пуст", reply_markup=client_markup.start_markup)
     else:
         for index, place in enumerate(places):
             place_id = place[0]
@@ -89,7 +102,7 @@ async def more_drink_places(callback_query: types.CallbackQuery, state: FSMConte
     drink_place_type = callback_query.data.split("_")[-1]
     places = db.get_random_3_drink_place_by_type(drink_place_type)
     if len(places) == 0:
-        await bot.send_message(callback_query.from_user.id, "Список заведений пуст!",
+        await bot.send_message(callback_query.from_user.id, "Список заведений пуст",
                                reply_markup=client_markup.start_markup)
     else:
         for index, place in enumerate(places):
@@ -174,7 +187,7 @@ async def more_restaurants(callback_query: types.CallbackQuery, state: FSMContex
                     await bot.send_photo(photo=restaurant_photos[0][0], chat_id=callback_query.from_user.id,
                                          caption=caption, parse_mode="HTML", reply_markup=reply_markup)
         else:
-            await bot.send_message(callback_query.from_user.id, "Рестораны закончились! Скоро добавим новые заведения, а пока перейдите в главное меню", reply_markup=client_markup.start_markup)
+            await bot.send_message(callback_query.from_user.id, "Рестораны закончились! Скоро добавим новые заведения, а пока перейди в главное меню", reply_markup=client_markup.start_markup)
             await state.finish()
 
 
@@ -196,7 +209,7 @@ async def get_restaurants(callback_query: types.CallbackQuery, state: FSMContext
             async with state.proxy() as data:
                 data["restaurants"] = result
             if len(restaurants) == 0:
-                await bot.send_message(callback_query.from_user.id, "Рестораны закончились! Скоро добавим новые заведения, а пока перейдите в главное меню",
+                await bot.send_message(callback_query.from_user.id, "Рестораны закончились! Скоро добавим новые заведения, а пока перейди в главное меню",
                                        reply_markup=client_markup.start_markup)
                 await state.finish()
             else:
@@ -249,7 +262,7 @@ async def get_place_photos(message: types, state: FSMContext):
 
 @dp.message_handler(content_types=types.ContentType.TEXT, state=FSMPlace.photos)
 async def next_place_photos(message: types, state: FSMContext):
-    await bot.send_message(message.from_user.id, "Теперь пришлите мне название заведения")
+    await bot.send_message(message.from_user.id, "Теперь пришли мне название заведения")
     await FSMPlace.next()
 
 
@@ -258,7 +271,7 @@ async def get_place_name(message: types, state: FSMContext):
     name = message.text
     async with state.proxy() as data:
         data["name"] = name
-    await bot.send_message(message.from_user.id, "Теперь пришлите мне адрес заведения")
+    await bot.send_message(message.from_user.id, "Теперь пришли мне адрес заведения")
     await FSMPlace.next()
 
 
@@ -267,7 +280,7 @@ async def get_place_address(message: types, state: FSMContext):
     address = message.text
     async with state.proxy() as data:
         data["address"] = address
-    await bot.send_message(message.from_user.id, "Теперь пришлите мне режим работы заведения")
+    await bot.send_message(message.from_user.id, "Теперь пришли мне режим работы заведения")
     await FSMPlace.next()
 
 
@@ -276,7 +289,7 @@ async def get_place_work_hours(message: types, state: FSMContext):
     work_hours = message.text
     async with state.proxy() as data:
         data["work_hours"] = work_hours
-    await bot.send_message(message.from_user.id, "Теперь пришлите мне ссылку на яндекс карты заведения")
+    await bot.send_message(message.from_user.id, "Теперь пришли мне ссылку на яндекс карты заведения")
     await FSMPlace.next()
 
 
@@ -285,7 +298,7 @@ async def get_place_yandex_link(message: types, state: FSMContext):
     link_to_yandex = message.text
     async with state.proxy() as data:
         data["link_to_yandex"] = link_to_yandex
-    await bot.send_message(message.from_user.id, "Теперь пришлите мне координаты заведения")
+    await bot.send_message(message.from_user.id, "Теперь пришли мне координаты заведения")
     await FSMPlace.next()
 
 
@@ -314,7 +327,7 @@ async def get_kitchen_add_restaurant(callback: types.CallbackQuery, state: FSMCo
     async with state.proxy() as data:
         data["kitchen_id"] = kitchen_id
         data["photos"] = []
-    await bot.send_message(callback.from_user.id, "Теперь пришлите фотографии заведения (в сжатом виде)",
+    await bot.send_message(callback.from_user.id, "Теперь пришли фотографии заведения (в сжатом виде)",
                            reply_markup=admin_markup.next_markup)
     await FSMPlace.next()
 
@@ -329,7 +342,7 @@ async def get_expert_photos(message: types, state: FSMContext):
 
 @dp.message_handler(content_types=types.ContentType.TEXT, state=FSMExpert.photos)
 async def next_expert_photos(message: types, state: FSMContext):
-    await bot.send_message(message.from_user.id, "Теперь пришлите мне имя специалиста")
+    await bot.send_message(message.from_user.id, "Теперь пришли мне имя специалиста")
     await FSMExpert.next()
 
 
@@ -338,7 +351,7 @@ async def get_expert_name(message: types, state: FSMContext):
     name = message.text
     async with state.proxy() as data:
         data["name"] = name
-    await bot.send_message(message.from_user.id, "Теперь пришлите мне описание стиля специалиста")
+    await bot.send_message(message.from_user.id, "Теперь пришли мне описание стиля специалиста")
     await FSMExpert.next()
 
 
@@ -347,7 +360,7 @@ async def get_expert_description_style(message: types, state: FSMContext):
     description_style = message.text
     async with state.proxy() as data:
         data["description_style"] = description_style
-    await bot.send_message(message.from_user.id, "Теперь пришлите мне стоимость")
+    await bot.send_message(message.from_user.id, "Теперь пришли мне стоимость")
     await FSMExpert.next()
 
 
@@ -356,7 +369,7 @@ async def get_expert_price(message: types, state: FSMContext):
     price = message.text
     async with state.proxy() as data:
         data["price"] = price
-    await bot.send_message(message.from_user.id, "Теперь пришлите ссылку на страничку специалиста на сайте")
+    await bot.send_message(message.from_user.id, "Теперь пришли ссылку на страничку специалиста на сайте")
     await FSMExpert.next()
 
 
@@ -740,102 +753,210 @@ async def get_type_place(message: types.Message, state: FSMContext):
 
 @dp.callback_query_handler(lambda c: c.data.startswith("like_expert"), state=FSMClient.choice_experts)
 async def like_expert(callback: types.CallbackQuery, state: FSMContext):
-    if callback.data.startswith("like_expert"):
-        async with state.proxy() as data:
-            expert_type = callback.data.split("_")[-1]
-            expert_id = callback.data.split("_")[-2]
-            if data.get(expert_type) is None:
-                await callback.answer("Лайкнуто!")
-                markup_ = callback.message.reply_markup
+    async with state.proxy() as data:
+        expert_type = callback.data.split("_")[-1]
+        expert_id = callback.data.split("_")[-2]
+        if data.get(expert_type) is None:
+            await callback.answer("Лайкнуто!")
+            markup_ = callback.message.reply_markup
 
-                markup_.inline_keyboard[0][0] = InlineKeyboardButton(text="❤️ Лайк", callback_data=f"like_expert_{expert_id}_{expert_type}")
-                await callback.message.edit_reply_markup(markup_)
-                data[expert_type] = expert_id
-                expert_types: list = data["expert_types"]
-                expert_type_index = expert_types.index(expert_type)
-                if expert_type_index != len(expert_types) - 1:
-                    await show_expert(expert_types[expert_type_index + 1], callback.from_user.id)
-                else:
-                    await FSMClient.next()
-                    data["records"] = []
-                    expert_type = expert_types.pop(0)
-                    data["expert_types"] = expert_types
+            markup_.inline_keyboard[0][0] = InlineKeyboardButton(text="❤️ Лайк", callback_data=f"like_expert_{expert_id}_{expert_type}")
+            await callback.message.edit_reply_markup(markup_)
+            data[expert_type] = expert_id
+            expert_types: list = data["expert_types"]
+            expert_type_index = expert_types.index(expert_type)
+            if expert_type_index != len(expert_types) - 1:
+                await show_expert(expert_types[expert_type_index + 1], callback.from_user.id)
+            else:
+                await FSMClient.next()
+                free_times_all = [f"{i}:00" if i >= 10 else f"0{i}:00" for i in range(9, 22)]
+                for expert_type in expert_types:
+
                     expert_id = data[expert_type]
-                    expert_name = db.get_expert_by_id(expert_id)[0][0]
-                    current_date = datetime.datetime.now().strftime("%Y-%m-%d")
-                    free_times_to_record = calendar.get_free_times_for_record(current_date)
-                    await bot.send_message(callback.from_user.id, f"Выбери время для записи к {expert_name}",
-                                           reply_markup=client_markup.create_markup_to_record(free_times_to_record,
-                                                                                              current_date, expert_id))
+                    if expert_id is not None:
+                        expert_calendar_id = db.get_expert_by_id(expert_id)[0][4]
+                        current_date = datetime.datetime.now().strftime("%Y-%m-%d")
+                        free_times_to_record = calendar.get_free_times_for_record(current_date, expert_calendar_id)
+                        copy_free_times_all = free_times_all.copy()
+                        for item in copy_free_times_all:
+                            if item not in free_times_to_record:
+                                free_times_all.remove(item)
+
+                await bot.send_message(callback.from_user.id, f"Выбери время для записи",
+                                       reply_markup=client_markup.create_markup_to_record(free_times_all,
+                                                                                          current_date))
+
+
+@dp.callback_query_handler(lambda c: c.data.startswith("skip_expert"), state=FSMClient.choice_experts)
+async def skip_expert(callback: types.CallbackQuery, state: FSMContext):
+    async with state.proxy() as data:
+        expert_type = callback.data.split("_")[-1]
+        expert_types: list = data["expert_types"]
+        expert_type_index = expert_types.index(expert_type)
+        if expert_type_index != len(expert_types) - 1:
+            await show_expert(expert_types[expert_type_index + 1], callback.from_user.id)
+        else:
+            await FSMClient.next()
+            free_times_all = [f"{i}:00" if i >= 10 else f"0{i}:00" for i in range(9, 22)]
+            for expert_type in expert_types:
+
+                expert_id = data[expert_type]
+                if expert_id is None:
+                    continue
+                expert_calendar_id = db.get_expert_by_id(expert_id)[0][4]
+                current_date = datetime.datetime.now().strftime("%Y-%m-%d")
+                free_times_to_record = calendar.get_free_times_for_record(current_date, expert_calendar_id)
+                copy_free_times_all = free_times_all.copy()
+                for item in copy_free_times_all:
+                    if item not in free_times_to_record:
+                        free_times_all.remove(item)
+
+            await bot.send_message(callback.from_user.id, f"Выбери время для записи",
+                                   reply_markup=client_markup.create_markup_to_record(free_times_all,
+                                                                                      current_date))
 
 
 @dp.callback_query_handler(lambda c: c.data.startswith("previous_day_record_"), state=FSMClient.choice_times_to_record)
-async def previous_day_record_(callback: types.CallbackQuery):
+async def previous_day_record_(callback: types.CallbackQuery, state: FSMContext):
     callback_split = callback.data.split("_")
-    expert_id = callback_split[-1]
-    date = callback_split[-2]
+    date = callback_split[-1]
     if date != datetime.datetime.now().strftime("%Y-%m-%d"):
         previous_date = (datetime.datetime.strptime(date, "%Y-%m-%d") - datetime.timedelta(days=1)).strftime("%Y-%m-%d")
-        free_times_to_record = calendar.get_free_times_for_record(previous_date)
-        await callback.message.edit_reply_markup(reply_markup=client_markup.create_markup_to_record(free_times_to_record, previous_date, expert_id))
+        free_times_all = [f"{i}:00" if i >= 10 else f"0{i}:00" for i in range(9, 22)]
+
+        async with state.proxy() as data:
+            expert_types = data["expert_types"]
+            for expert_type in expert_types:
+
+                expert_id = data[expert_type]
+                if expert_id is not None:
+                    expert_calendar_id = db.get_expert_by_id(expert_id)[0][4]
+                    free_times_to_record = calendar.get_free_times_for_record(previous_date, expert_calendar_id)
+                    copy_free_times_all = free_times_all.copy()
+                    for item in copy_free_times_all:
+                        if item not in free_times_to_record:
+                            free_times_all.remove(item)
+
+            await callback.message.edit_reply_markup(reply_markup=client_markup.create_markup_to_record(free_times_all, previous_date))
 
 
 @dp.callback_query_handler(lambda c: c.data.startswith("next_day_record_"), state=FSMClient.choice_times_to_record)
-async def next_day_record_(callback: types.CallbackQuery):
+async def next_day_record_(callback: types.CallbackQuery, state: FSMContext):
     callback_split = callback.data.split("_")
-    expert_id = callback_split[-1]
-    date = callback_split[-2]
+    date = callback_split[-1]
     if date <= (datetime.datetime.now() + datetime.timedelta(days=30)).strftime("%Y-%m-%d"):
         next_date = (datetime.datetime.strptime(date, "%Y-%m-%d") + datetime.timedelta(days=1)).strftime("%Y-%m-%d")
-        free_times_to_record = calendar.get_free_times_for_record(next_date)
-        await callback.message.edit_reply_markup(reply_markup=client_markup.create_markup_to_record(free_times_to_record, next_date, expert_id))
+
+        free_times_all = [f"{i}:00" if i >= 10 else f"0{i}:00" for i in range(9, 22)]
+
+        async with state.proxy() as data:
+            expert_types = data["expert_types"]
+            for expert_type in expert_types:
+
+                expert_id = data[expert_type]
+                if expert_id is not None:
+                    expert_calendar_id = db.get_expert_by_id(expert_id)[0][4]
+                    free_times_to_record = calendar.get_free_times_for_record(next_date, expert_calendar_id)
+                    copy_free_times_all = free_times_all.copy()
+                    for item in copy_free_times_all:
+                        if item not in free_times_to_record:
+                            free_times_all.remove(item)
+
+            await callback.message.edit_reply_markup(
+                reply_markup=client_markup.create_markup_to_record(free_times_all, next_date))
 
 
 @dp.callback_query_handler(lambda c: c.data.startswith("record_"), state=FSMClient.choice_times_to_record)
-async def record_user_to_expert(callback: types.CallbackQuery, state: FSMContext):
+async def record_user_to_experts(callback: types.CallbackQuery, state: FSMContext):
     callback_split = callback.data.split("_")
-    expert_id = callback_split[-1]
-    date = callback_split[-2]
-    time = callback_split[-3]
+    date = callback_split[-1]
+    time = callback_split[-2]
     async with state.proxy() as data:
-        data["records"].append([date, time, expert_id])
+        # Создание payment на оплату
+        data["date"] = date
+        data["time"] = time
+        print(date, time)
         expert_types = data["expert_types"]
-        if len(expert_types) != 0:
-            expert_type = expert_types.pop(0)
-            data["expert_types"] = expert_types
-            expert_id = data[expert_type]
-            expert_name = db.get_expert_by_id(expert_id)[0][0]
-            current_date = datetime.datetime.now().strftime("%Y-%m-%d")
-            free_times_to_record = calendar.get_free_times_for_record(current_date)
-            await bot.send_message(callback.from_user.id, f"Выбери время для записи к {expert_name}",
-                                   reply_markup=client_markup.create_markup_to_record(free_times_to_record,
-                                                                                      current_date, expert_id))
-        else:
-            # Создание payment на оплату
-            await FSMClient.next()
-            price = 0
-            for item in data["records"]:
-                expert = db.get_expert_by_id(item[-1])
-                price += int(expert[0][2])
-            url, bill = wallet.create_payment(3)
-            db.add_payment(callback.from_user.id, bill, price, datetime.datetime.now().strftime("%Y-%m-%d"))
-            await bot.send_message(callback.from_user.id, "Для оплаты записи перейдите по ссылке", reply_markup=client_markup.create_markup_payment(url, bill))
+        await bot.send_message(callback.from_user.id, "Введи свое имя для записи")
+        await FSMClient.next()
+
+
+@dp.message_handler(state=FSMClient.get_name)
+async def get_name_client(message: types.Message, state: FSMContext):
+    async with state.proxy() as data:
+        data["name"] = message.text.strip()
+    await bot.send_message(message.from_user.id, "Теперь введи свой номер телефона")
+    await FSMClient.get_phone.set()
+
+
+@dp.message_handler(state=FSMClient.get_phone)
+async def get_phone_client(message: types.Message, state: FSMContext):
+    async with state.proxy() as data:
+        data["phone"] = message.text.strip()
+    await bot.send_message(message.from_user.id, "Теперь введи свою электронную почту")
+    await FSMClient.get_email.set()
+
+
+@dp.message_handler(state=FSMClient.get_email)
+async def get_email_client(message: types.Message, state: FSMContext):
+    email = message.text.strip()
+    async with state.proxy() as data:
+        await FSMClient.next()
+        data["email"] = email
+        expert_types = data["expert_types"]
+        price = 0
+        experts = [data[type_] for type_ in expert_types if data[type_] is not None]
+        for item in experts:
+            expert = db.get_expert_by_id(item)
+            price += int(expert[0][2])
+        url, bill = wallet.create_payment(3)
+        db.add_payment(message.from_user.id, bill, price, datetime.datetime.now().strftime("%Y-%m-%d"))
+        await bot.send_message(message.from_user.id, "Для оплаты записи перейди по ссылке", reply_markup=client_markup.create_markup_payment(url, bill))
 
 
 @dp.callback_query_handler(lambda c: c.data.startswith("payment_successful"), state=FSMClient.payment)
 async def payment_successful(callback: types.CallbackQuery, state:FSMContext):
     bill_id = callback.data.split("_")[-1]
     if wallet.check_payment(bill_id) == 'Оплачено':
-        # Запись в гугл календарь
         async with state.proxy() as data:
-            records = data["records"]
-            for record in records:
-                expert_calendar_id = db.get_expert_by_id(record[2])[0][4]
-                date_from = f"{record[0]}T{record[1]}:00"
-                hour_to = "10:00" if record[1] == "09:00" else f"{int(record[1].split(':')[0]) + 1}:00"
-                date_to = f"{record[0]}T{hour_to}:00"
-                calendar.insert_into_calendar(expert_calendar_id, date_from=date_from, date_to=date_to)
-            await bot.send_message(callback.from_user.id, "Успешно записал вас!")
+            name = data["name"]
+            phone = data["phone"]
+            time = data["time"]
+            date = data["date"]
+            email = data["email"]
+            expert_types = data["expert_types"]
+            experts = [data[type_] for type_ in expert_types if data[type_] is not None]
+
+            datetime_mail = datetime.datetime.strptime("2023-07-19", "%Y-%m-%d")
+            date_mail = datetime_mail.strftime("%d") + " " + month_eng_to_ru[
+                datetime_mail.strftime("%B")] + " " + datetime_mail.strftime("%Y")
+            subject = "Информация о записи"
+            body = f"""{name}, привет это команда MIISSART
+Рады помочь тебе со всеми твоими творческими идеями! 
+Фото-день пройдет «{date_mail} г. в {time}\n\nСкоро с тобой свяжемся для подтверждения и уточнения дополнительной информации\n\n\nДетали записи:\n"""
+            total_price = 0
+            for expert in experts:
+                expert_info = db.get_expert_by_id_mail(expert)
+                expert_calendar_id = expert_info[0][5]
+                expert_name = expert_info[0][0]
+                expert_type = {"photographer": "Фотограф", "visagiste": "Визажист", "hairstylist": "Стилист по волосам", "photostudio": "Фотостудия", "stylist": "Стилист"}[expert_info[0][1]]
+                expert_style = expert_info[0][2]
+                expert_price = expert_info[0][3]
+                expert_link = expert_info[0][4]
+                total_price += int(expert_price)
+                expert_style = f"Описание стиля: {expert_style}" if expert_type != "Фотостудия" else f"Адрес: {expert_style}"
+                body += f"•{expert_name}\n{expert_type}\n{expert_style}\n{expert_price}Р\n{expert_link}\n\n"
+                date_from = f"{date}T{time}:00"
+                hour_to = "10:00" if time == "09:00" else f"{int(time.split(':')[0]) + 1}:00"
+                date_to = f"{date}T{hour_to}:00"
+                summary = f"{name} {phone} {email}"
+                calendar.insert_into_calendar(expert_calendar_id, summary=summary, date_from=date_from, date_to=date_to)
+            body += f"_________________________\nИтого: {total_price}\n\n\n"
+            body += """*Цены в письме указаны на основе прайс-листа и выбранных характеристик.
+ Дополнительные неординарные идеи обсуждаются и оплачиваются отдельно.\n\n\n\n"""
+            body += """_________\nЭто письмо отправлено автоматически, отвечать на него не нужно. По всем вопросам можно обратиться на почту miissart.help@yandex.com. Сообщение электронной почты и любые файлы, переданные с ним, предназначены для использования только адресатом и не подлежат разглашению. Любое несанкционированное использование, хранение, копирование, раскрытие или распространение запрещено. Если вы не являетесь предполагаемым адресатом и сообщение попало к вам по ошибке, пожалуйста, сообщите отправителю об этом ответным письмом и удалите все копии оригинального сообщения и вложения к нему."""
+            email_send.send_email(subject, body, email)
+            await bot.send_message(callback.from_user.id, "Успешно записали тебя!")
             await state.finish()
     else:
         await callback.answer("Не оплачено!")
@@ -860,6 +981,15 @@ async def get_photo_for_kitchen(message: types.Message, state: FSMContext):
     await state.finish()
 
 
+@dp.callback_query_handler(lambda c: c.data.startswith("delete_from_favorite_"))
+async def delete_from_favorite_(callback: types.CallbackQuery, state:FSMContext):
+    callback_split = callback.data.split("_")
+    place_id = callback_split[-1]
+    place_type = callback_split[-2]
+    db.delete_favorite(place_type, place_id, callback.from_user.id)
+    await callback.answer("Удалено!")
+
+
 @dp.message_handler()
 async def all_messages(message: types.Message, state: FSMContext):
     if message.from_user.id in config.ADMINS:
@@ -881,20 +1011,20 @@ async def all_messages(message: types.Message, state: FSMContext):
             async with state.proxy() as data:
                 data["place_type"] = place_type
                 data["photos"] = []
-            await bot.send_message(message.from_user.id, "Пришлите фотографии заведения (в сжатом виде)", reply_markup=admin_markup.next_markup)
+            await bot.send_message(message.from_user.id, "Пришли фотографии заведения (в сжатом виде)", reply_markup=admin_markup.next_markup)
         elif message.text == replicas.add_restaurant:
             # Добавление ресторана
             await FSMPlace.kitchen.set()
-            await bot.send_message(message.chat.id, "Выберите кухню, к которой прикрепится ресторан")
+            await bot.send_message(message.chat.id, "Выбери кухню, к которой прикрепится ресторан")
             async with state.proxy() as data:
                 data["place_type"] = "restaurant"
                 kitchens = db.get_kitchens()
                 kitchen_markup = admin_markup.generate_markup_kitchens_add(kitchens)
-                await bot.send_message(message.from_user.id, "Выберите кухню", reply_markup=kitchen_markup)
+                await bot.send_message(message.from_user.id, "Выбери кухню", reply_markup=kitchen_markup)
 
         elif message.text == replicas.add_expert:
             # Выбор специалиста
-            await bot.send_message(message.chat.id, "Выберите тип специалиста", reply_markup=admin_markup.markup_add_expert)
+            await bot.send_message(message.chat.id, "Выбери тип специалиста", reply_markup=admin_markup.markup_add_expert)
         elif message.text in (replicas.add_expert_photo_studio, replicas.add_expert_photographer, replicas.add_expert_stylist,
                               replicas.add_expert_hair_stylist, replicas.add_expert_visagiste):
             # Добавление специалиста
@@ -912,7 +1042,7 @@ async def all_messages(message: types.Message, state: FSMContext):
             async with state.proxy() as data:
                 data["expert_type"] = expert_type
                 data["photos"] = []
-            await bot.send_message(message.from_user.id, "Пришлите фотографии работ (в сжатом виде)", reply_markup=admin_markup.next_markup)
+            await bot.send_message(message.from_user.id, "Пришли фотографии работ (в сжатом виде)", reply_markup=admin_markup.next_markup)
         elif message.text == replicas.add_kitchen:
             await bot.send_message(message.from_user.id, "Пришли мне наименование кухни")
             await FSMKitchen.name.set()
@@ -920,7 +1050,7 @@ async def all_messages(message: types.Message, state: FSMContext):
             # Просмотр ресторанов
             kitchens = db.get_kitchens()
             markup_kitchens = admin_markup.generate_markup_kitchens_show(kitchens)
-            await bot.send_message(message.from_user.id, "Выберите кухню", reply_markup=markup_kitchens)
+            await bot.send_message(message.from_user.id, "Выбери кухню", reply_markup=markup_kitchens)
         elif message.text == replicas.show_bar or message.text == replicas.show_club or message.text == replicas.show_cafe:
             # Просмотр бара, клуба, кафе
             if message.text == replicas.show_bar:
@@ -940,10 +1070,10 @@ async def all_messages(message: types.Message, state: FSMContext):
 
         elif message.text == replicas.show_expert:
             # Просмотр специалистов
-            await bot.send_message(message.from_user.id, "Выберите тип специалиста", reply_markup=admin_markup.markup_show_expert)
+            await bot.send_message(message.from_user.id, "Выбери тип специалиста", reply_markup=admin_markup.markup_show_expert)
 
     if message.text == replicas.food:
-        await bot.send_message(message.from_user.id, "Еда", reply_markup=client_markup.food_markup)
+        await bot.send_message(message.from_user.id, "Выбери из списка необходимое", reply_markup=client_markup.food_markup)
     elif message.text == replicas.eat:
         await FSMClient.choice_kitchens.set()
 
@@ -954,7 +1084,7 @@ async def all_messages(message: types.Message, state: FSMContext):
         for index in range(len(kitchens) - 1):
             await bot.send_photo(message.from_user.id, caption=kitchens[index][1], photo=kitchens[index][2], reply_markup=client_markup.generate_markup_like_kitchens(kitchens[index][0]))
         await bot.send_photo(message.from_user.id, caption=kitchens[-1][1], photo=kitchens[-1][2], reply_markup=client_markup.generate_markup_like_kitchens(kitchens[-1][0], is_last=True))
-        await bot.send_message(message.from_user.id, text="Лайкай кухни из сообщений выше и затем нажми «Получить результат»")
+        await bot.send_message(message.from_user.id, text="Лайкни кухни, которые тебе нравятся, из списка выше затем нажми «Получить результат». Мы подберем лучшее заведение, исходя из предпочтений")
     elif message.text == replicas.event:
         await bot.send_message(message.from_user.id, "Мероприятия", reply_markup=client_markup.event_markup)
     elif message.text == replicas.photo_day:
@@ -979,7 +1109,7 @@ async def all_messages(message: types.Message, state: FSMContext):
     elif message.text == replicas.favorite:
         places = db.get_favorites_places(message.from_user.id)
         if len(places) == 0:
-            await bot.send_message(message.from_user.id, "Список избранных заведений пуст!")
+            await bot.send_message(message.from_user.id, "Список избранных заведений пуст")
         else:
             for place in places:
                 if place[5] == "restaurant":
@@ -989,12 +1119,13 @@ async def all_messages(message: types.Message, state: FSMContext):
                 place_name = place[1]
                 place_address = place[2]
                 place_work_hours = place[3]
+                place_link = place[4]
                 caption = f"Информация о заведение - <b>{place_name}</b>:\n" \
                           f"Адрес: {place_address}\n" \
                           f"Часы работы: {place_work_hours}\n"
 
                 if len(place_photos) == 0:
-                    await bot.send_message(message.from_user.id, caption, parse_mode="HTML")
+                    await bot.send_message(message.from_user.id, caption, parse_mode="HTML", reply_markup=client_markup.markup_favorite(place[5], place[0], place_link))
                 else:
                     if len(place_photos) > 1:
                         media = types.MediaGroup()
@@ -1002,25 +1133,26 @@ async def all_messages(message: types.Message, state: FSMContext):
                             media.attach_photo(photo[0])
                         await bot.send_media_group(message.from_user.id, media=media)
                         await bot.send_message(message.from_user.id, caption,
-                                               parse_mode="HTML")
+                                               parse_mode="HTML", reply_markup=client_markup.markup_favorite(place[5], place[0], place_link))
                     else:
                         await bot.send_photo(photo=place_photos[0][0], chat_id=message.from_user.id,
-                                             caption=caption, parse_mode="HTML")
+                                             caption=caption, parse_mode="HTML", reply_markup=client_markup.markup_favorite(place[5], place[0], place_link))
 
 
 async def show_expert(expert_type, user_id):
     experts = db.get_experts_info_by_type(expert_type)
     if expert_type == "photographer":
-        await bot.send_message(user_id, "Выберите фотографа")
+        await bot.send_message(user_id, "Выбери фотографа")
     elif expert_type == "visagiste":
-        await bot.send_message(user_id, "Выберите визажиста")
+        await bot.send_message(user_id, "Выбери визажиста")
     elif expert_type == "stylist":
-        await bot.send_message(user_id, "Выберите стилиста")
+        await bot.send_message(user_id, "Выбери стилиста")
     elif expert_type == "hairstylist":
-        await bot.send_message(user_id, "Выберите стилиста по волосам")
+        await bot.send_message(user_id, "Выбери стилиста по волосам")
     elif expert_type == "photostudio":
-        await bot.send_message(user_id, "Выберите фото-студию")
+        await bot.send_message(user_id, "Выбери фото-студию")
     for expert in experts:
+
         expert_photos = db.get_expert_photo_by_id(expert[0])
         expert_name = expert[2]
         expert_style = expert[3]
@@ -1030,7 +1162,10 @@ async def show_expert(expert_type, user_id):
                   f"Описание стиля: {expert_style}\n" \
                   f"Цена: {expert_price}\n" \
                   f"Ссылка на специалиста: {expert_link}\n"
-        markup_ = client_markup.markup_like_experts(expert[0], expert_type)
+        if expert == experts[len(experts) - 1]:
+            markup_ = client_markup.markup_like_experts(expert[0], expert_type, is_last=True)
+        else:
+            markup_ = client_markup.markup_like_experts(expert[0], expert_type)
         if len(expert_photos) == 0:
             await bot.send_message(user_id, caption, reply_markup=markup_, parse_mode="HTML", disable_web_page_preview=True)
         elif len(expert_photos) > 1:

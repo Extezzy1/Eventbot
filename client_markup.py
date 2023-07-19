@@ -46,11 +46,11 @@ def generate_markup_like_kitchens(kitchen_id, is_like=False, is_last=False):
     markup = InlineKeyboardMarkup()
     if is_like:
         markup.add(
-            InlineKeyboardButton(text="❤️ Лайк", callback_data=f"kitchen_{kitchen_id}")
+            InlineKeyboardButton(text="❤️", callback_data=f"kitchen_{kitchen_id}")
         )
     else:
         markup.add(
-            InlineKeyboardButton(text="Лайк", callback_data=f"kitchen_{kitchen_id}")
+            InlineKeyboardButton(text="🤍", callback_data=f"kitchen_{kitchen_id}")
         )
     if is_last:
         markup.add(
@@ -121,21 +121,25 @@ def generate_markup_link_to_yandex(type, link, id_favorite, is_favorite=False):
     return markup
 
 
-def markup_like_experts(expert_id, expert_type):
+def markup_like_experts(expert_id, expert_type, is_last=False):
     markup = InlineKeyboardMarkup().add(InlineKeyboardButton(text="Лайк", callback_data=f"like_expert_{expert_id}_{expert_type}"))
+    if is_last:
+        markup.add(
+            InlineKeyboardButton(text="Пропустить категорию", callback_data=f"skip_expert_{expert_type}")
+        )
     return markup
 
 
-def create_markup_to_record(free_times_to_record, current_date, expert_id):
+def create_markup_to_record(free_times_to_record, current_date):
     markup = InlineKeyboardMarkup(row_width=4)
     markup.add(
-        InlineKeyboardButton(text="<<<", callback_data=f"previous_day_record_{current_date}_{expert_id}"),
+        InlineKeyboardButton(text="<<<", callback_data=f"previous_day_record_{current_date}"),
         InlineKeyboardButton(text=current_date, callback_data="current_day_record"),
-        InlineKeyboardButton(text=">>>", callback_data=f"next_day_record_{current_date}_{expert_id}"),
+        InlineKeyboardButton(text=">>>", callback_data=f"next_day_record_{current_date}"),
     )
     btns = []
     for time in free_times_to_record:
-        btns.append(InlineKeyboardButton(text=time, callback_data=f"record_{time}_{current_date}_{expert_id}"))
+        btns.append(InlineKeyboardButton(text=time, callback_data=f"record_{time}_{current_date}"))
     markup.add(*btns)
     return markup
 
@@ -146,5 +150,13 @@ def create_markup_payment(url, bill_id):
         InlineKeyboardButton(text="Оплатить", url=url),
         InlineKeyboardButton(text="Я оплатил(а)", callback_data=f"payment_successful_{bill_id}")
 
+    )
+    return markup
+
+
+def markup_favorite(place_type, place_id, link):
+    markup = InlineKeyboardMarkup(row_width=1).add(
+        InlineKeyboardButton(text="Удалить из избранного", callback_data=f"delete_from_favorite_{place_type}_{place_id}"),
+        InlineKeyboardButton(text="Найти на карте", url=link),
     )
     return markup

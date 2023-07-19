@@ -6,7 +6,12 @@ class FSMClient(StatesGroup):
     choice_drink_places = State()
     choice_experts = State()
     choice_times_to_record = State()
+    get_name = State()
+    get_phone = State()
+    get_email = State()
     payment = State()
+
+
 
 class FSMGeo(StatesGroup):
     enter_type_place = State()
